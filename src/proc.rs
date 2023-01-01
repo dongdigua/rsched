@@ -38,6 +38,13 @@ impl Proc {
         }
     }
 
+    pub fn run(&mut self, timeslice: u64) -> bool {
+        self.unparker.unpark();
+        thread::sleep(Duration::from_millis(timeslice));
+        self.parker.park();
+        self.handle.is_finished()
+    }
+
     fn random_thing() {
         let mut rng = thread_rng();
         let n: u64 = rng.gen_range(100..1000); 
