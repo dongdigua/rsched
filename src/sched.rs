@@ -10,13 +10,6 @@ use rand::prelude::*;
 const TIMESLICE: u64 = 20;
 
 #[derive (Debug)]
-struct Rq {
-    nr: usize,
-    // TODO: remove nr, because, why not
-    stair: LinkedList<Entity>,
-}
-
-#[derive (Debug)]
 struct Entity {
     normal_prio: u8, // change if it reached bottom
     prio: u8,        // to sort
@@ -27,9 +20,7 @@ struct Entity {
 }
 
 impl Entity {
-    pub fn new_random() -> Self {
-        let mut rng = thread_rng();
-        let prio: u8 = rng.gen_range(prio::MAX_RR_PRIO..prio::MAX_PRIO); 
+    pub fn new(prio: u8) -> Self {
         Entity {
             normal_prio: prio,
             prio,
@@ -38,6 +29,17 @@ impl Entity {
             runable: true,
         }
     }
+
+    pub fn new_random() -> Self {
+        let mut rng = thread_rng();
+        let prio: u8 = rng.gen_range(prio::MAX_RR_PRIO..prio::MAX_PRIO); 
+        Entity::new(prio)
+    }
+}
+
+#[derive (Debug)]
+struct Rq {
+    stair: LinkedList<Entity>,
 }
 
 impl Rq {
@@ -52,38 +54,20 @@ impl Rq {
         }
 
         drop(entities);
-        Rq {
-            nr: len,
-            stair: ll,
-        }
+        Rq { stair: ll }
     }
 
     pub fn schedule(&mut self) {
         // now first implement a single-cpu one
         let mut curr = self.stair.pop_front().unwrap();
-        if self.nr == 1 {
+        if self.stair.len() <= 1 {
             curr.timeslice += curr.timeslice;
             curr.normal_prio -= 1;
             curr.prio = curr.normal_prio;
         } else {
             let ll = &mut self.stair;
             curr.prio -= 1;
-            let mut i_prio = 0;
-
-            // well, many of linkedlist function are nightly, but no
-            ll.iter()
-                .for_each(|i| {
-                    if i.prio < curr.prio { i_prio = 1 }
-                });
-            // for i in 0..self.nr {
-            //     if curr.prio < ll[i] { i_prio = i }
-            // };
-            // Returns everything after the given index,
-            // including the index.
-            let mut split = ll.split_off(i_prio);
-            split.push_front(curr);
-
-            ll.append(&mut split);
+            insert_ab(ll, curr, InsertOption::After);
         }
     }
 
@@ -93,8 +77,41 @@ impl Rq {
         if curr.runable { self.stair.push_front(curr) };
     }
 
-    pub fn insert() {}
+    pub fn insert(&mut self, entity: Entity) {
+        let ll = &mut self.stair;
+        insert_ab(ll, entity, InsertOption::Before);
+    }
 }
+
+enum InsertOption { Before, After }
+
+// after of before
+// notice: it is a decrementl list
+#[inline]
+fn insert_ab(ll: &mut LinkedList<Entity>, entity: Entity, option: InsertOption) {
+    let mut idx = 0;
+    let mut iter = ll.iter();
+    
+    for i in 0..ll.len() {
+        let cur = iter.next().unwrap(); // uhh, we don't have get()
+        match option {
+            InsertOption::Before =>
+                if cur.prio <= entity.prio { idx = i ; break },
+            InsertOption::After =>
+                // 2, 2, 1 (1)
+                if cur.prio <  entity.prio { idx = i ; break },
+        };
+    }
+    if let option = InsertOption::After { if idx == 0 { idx = ll.len() }} // important
+
+    // Returns everything after the given index,
+    // including the index.
+    let mut split = ll.split_off(idx);
+    split.push_front(entity);
+
+    ll.append(&mut split);
+}
+
 
 #[cfg(test)]
 use super::*;
@@ -107,5 +124,33 @@ fn sort_random_entity() {
         .map(|_|  Entity::new_random() )
         .collect();
     let rq = Rq::new(&mut entities);
-    println!("{:#?}", rq);
+    println!("random: {:#?}", rq);
+}
+
+#[test]
+fn insert_entity() {
+    let mut entities = vec![
+        Entity::new(103),
+        Entity::new(102),
+        Entity::new(102),
+        Entity::new(101),
+    ];
+    let mut rq = Rq::new(&mut entities);
+    rq.insert(Entity::new(101));
+    rq.insert(Entity::new(102));
+    println!("insert: {:#?}", rq);
+}
+
+#[test]
+fn sched_entity() {
+    let mut entities = vec![
+        Entity::new(103),
+        Entity::new(102),
+        Entity::new(102),
+        Entity::new(101),
+    ];
+    let mut rq = Rq::new(&mut entities);
+    rq.schedule();
+    rq.schedule();
+    println!("schedule: {:#?}", rq);
 }

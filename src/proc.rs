@@ -9,7 +9,6 @@ use rand::prelude::*;
 
 #[derive (Debug)]
 pub struct Proc {
-    // proc:  &'static dyn Fn() -> (),
     handle: JoinHandle<()>,
     parker:   Parker,
     unparker: Unparker,
@@ -38,6 +37,7 @@ impl Proc {
         }
     }
 
+    #[inline]
     pub fn run(&mut self, timeslice: u64) -> bool {
         self.unparker.unpark();
         thread::sleep(Duration::from_millis(timeslice));
