@@ -67,7 +67,8 @@ impl Rq {
     // don't need to borrow
     pub fn new(mut entities: Vec<Entity>) -> Self {
         let mut ll = LinkedList::new();
-        entities.sort_by(|a, b| b.prio.partial_cmp(&a.prio).unwrap());
+        // lower value means higher priority
+        entities.sort_by(|a, b| a.prio.partial_cmp(&b.prio).unwrap());
 
         let len = entities.len();
         for _i in 1..=len {
@@ -84,18 +85,18 @@ impl Rq {
         if self.stair.len() == 0 { return }
 
         let mut curr = self.stair.pop_front().unwrap();
-        if curr.prio <= prio::MAX_RR_PRIO {
-            curr.prio = prio::MAX_RR_PRIO +1;
-            curr.normal_prio = prio::MAX_RR_PRIO +1;
+        if curr.prio <= prio::MAX_PRIO {
+            curr.prio = prio::MAX_PRIO -1;
+            curr.normal_prio = prio::MAX_PRIO -1;
         }
 
         if self.stair.len() <= 1 {
             curr.timeslice += TIMESLICE;
-            curr.normal_prio -= 1;
+            curr.normal_prio += 1;
             curr.prio = curr.normal_prio;
         } else {
             let ll = &mut self.stair;
-            curr.prio -= 1;
+            curr.prio += 1;
             insert_ab(ll, curr, InsertOption::After);
         }
     }
@@ -132,7 +133,6 @@ impl Rq {
 enum InsertOption { Before, After }
 
 // after of before the equal one
-// notice: it is a decrementl list
 #[inline]
 fn insert_ab(ll: &mut LinkedList<Entity>, entity: Entity, option: InsertOption) {
     let mut idx = 0;
@@ -144,13 +144,14 @@ fn insert_ab(ll: &mut LinkedList<Entity>, entity: Entity, option: InsertOption) 
         idx = i;
         match option {
             InsertOption::Before =>
-                if cur.prio <= entity.prio { break }
+                if cur.prio >= entity.prio { break }
             else { if idx == len-1 { idx+=1 } },
             InsertOption::After =>
-                if cur.prio <  entity.prio { break },
+                if cur.prio >  entity.prio { break }
+            else { if idx == len-1 { idx+=1 } },
         };
     }
-    // if let InsertOption::After = option { if idx == 0 { idx = ll.len() }} // important
+    if let InsertOption::After = option { if idx == 0 { idx = len }} // important
 
     // Returns everything after the given index,
     // including the index.
@@ -180,10 +181,10 @@ fn sort_random_entity() {
 #[test]
 fn insert_entity() {
     let mut entities = vec![
-        Entity::new(103),
-        Entity::new(102),
-        Entity::new(102),
         Entity::new(101),
+        Entity::new(102),
+        Entity::new(102),
+        Entity::new(103),
     ];
     let mut rq = Rq::new(entities);
     rq.insert(Entity::new(100));
@@ -215,6 +216,7 @@ fn spawn_rq() {
         .into_iter()
         .map(|_|  Entity::new_random() )
         .collect();
+    println!("random: {:?}", &entities);
     let tx = Rq::spawn(entities);
     (1..10)
         .into_iter()
